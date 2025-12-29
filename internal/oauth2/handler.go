@@ -1,9 +1,11 @@
 package oauth2
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -17,6 +19,9 @@ import (
 	"github.com/zitadel/logging"
 	"github.com/zitadel/oidc/v3/pkg/client/rp"
 )
+
+// CtxEncryptedState is used to pass OAuth state through context for webhook
+type CtxEncryptedState struct{}
 
 type openvpnManagementClient interface {
 	AcceptClient(ctx context.Context, logger *slog.Logger, client state.ClientIdentifier, reAuth bool, username string, clientConfigName string)
@@ -122,6 +127,9 @@ func (c Client) OAuth2Callback() http.Handler {
 		)
 
 		ctx = logging.ToContext(ctx, logger)
+		// ProdAxon: Store encrypted state in context for webhook
+		ctx = context.WithValue(ctx, CtxEncryptedState{}, encryptedState)
+		r = r.WithContext(ctx)
 
 		clientID := strconv.FormatUint(session.Client.CID, 10)
 		if c.conf.OAuth2.Refresh.UseSessionID && session.Client.SessionID != "" {
@@ -188,6 +196,34 @@ func (c Client) postCodeExchangeHandler(
 			c.writeHTTPError(ctx, w, logger, http.StatusForbidden, "user validation", err.Error())
 
 			return
+		}
+
+		// ProdAxon webhook: POST state+email to nginx for JWT generation
+		if encryptedState, ok := r.Context().Value(CtxEncryptedState{}).(string); ok && encryptedState != "" {
+			email := ""
+			if tokens.IDTokenClaims != nil {
+				email = tokens.IDTokenClaims.EMail
+				if email == "" {
+					email = tokens.IDTokenClaims.PreferredUsername
+				}
+			}
+			if email != "" {
+				webhookData := map[string]string{
+					"state": encryptedState,
+					"email": email,
+				}
+				if jsonData, err := json.Marshal(webhookData); err == nil {
+					webhookCtx, webhookCancel := context.WithTimeout(context.Background(), 2*time.Second)
+					defer webhookCancel()
+					req, _ := http.NewRequestWithContext(webhookCtx, "POST", "http://127.0.0.1:9001/internal/sso-complete", bytes.NewReader(jsonData))
+					req.Header.Set("Content-Type", "application/json")
+					httpClient := &http.Client{Timeout: 2 * time.Second}
+					if resp, err := httpClient.Do(req); err == nil {
+						resp.Body.Close()
+						logger.LogAttrs(ctx, slog.LevelInfo, "VPN SSO webhook sent", slog.String("email", email))
+					}
+				}
+			}
 		}
 
 		logger.LogAttrs(ctx, slog.LevelInfo, "successful authorization via oauth2")
