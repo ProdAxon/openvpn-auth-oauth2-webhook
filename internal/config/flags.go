@@ -367,6 +367,13 @@ func (c *Config) flagSetOAuth2(flagSet *flag.FlagSet) {
 		"If true, openvpn-auth-oauth2 will validate the user against the OIDC provider on each refresh. "+
 			"Usefully, if API limits are exceeded or OIDC provider can't deliver an refresh token.",
 	)
+	flagSet.StringVar(
+		&c.OAuth2.Refresh.StoragePath,
+		"oauth2.refresh.storage-path",
+		lookupEnvOrDefault("oauth2.refresh.storage-path", c.OAuth2.Refresh.StoragePath),
+		"Path to file for persistent token storage. If empty, tokens are stored in memory only and will be lost on restart. "+
+			"Example: /var/lib/openvpn-auth-oauth2/tokens.json",
+	)
 	flagSet.TextVar(
 		&c.OAuth2.Validate.Acr,
 		"oauth2.validate.acr",

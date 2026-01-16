@@ -124,6 +124,7 @@ type OAuth2Refresh struct {
 	Enabled      bool          `json:"enabled"        yaml:"enabled"`
 	UseSessionID bool          `json:"use-session-id" yaml:"use-session-id"`
 	ValidateUser bool          `json:"validate-user"  yaml:"validate-user"`
+	StoragePath  string        `json:"storage-path"   yaml:"storage-path"` // Path to persist tokens (empty = in-memory only)
 }
 
 type OpenVPNPassthrough struct {

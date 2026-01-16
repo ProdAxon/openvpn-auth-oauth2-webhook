@@ -171,14 +171,31 @@ func setupOpenVPNClient(
 	ctx context.Context, logger *slog.Logger, conf config.Config, tokenDataStorage tokenstorage.DataMap,
 ) (*openvpn.Client, *http.ServeMux, error) {
 	httpClient := &http.Client{Transport: utils.NewUserAgentTransport(http.DefaultTransport)}
-	tokenStorage := tokenstorage.NewInMemory(conf.OAuth2.Refresh.Secret.String(), conf.OAuth2.Refresh.Expires)
 
-	err := tokenStorage.SetStorage(tokenDataStorage)
-	if err != nil {
-		return nil, nil, fmt.Errorf("error setting token storage: %w", err)
+	// Use FileStorage if storage-path is configured, otherwise use InMemory
+	var tokenStorage tokenstorage.Storage
+	if conf.OAuth2.Refresh.StoragePath != "" {
+		logger.LogAttrs(ctx, slog.LevelInfo, "using file-based token storage",
+			slog.String("path", conf.OAuth2.Refresh.StoragePath),
+		)
+		tokenStorage = tokenstorage.NewFileStorage(
+			logger,
+			conf.OAuth2.Refresh.Secret.String(),
+			conf.OAuth2.Refresh.Expires,
+			conf.OAuth2.Refresh.StoragePath,
+		)
+	} else {
+		logger.LogAttrs(ctx, slog.LevelInfo, "using in-memory token storage (tokens will be lost on restart)")
+		inMemoryStorage := tokenstorage.NewInMemory(conf.OAuth2.Refresh.Secret.String(), conf.OAuth2.Refresh.Expires)
+		err := inMemoryStorage.SetStorage(tokenDataStorage)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error setting token storage: %w", err)
+		}
+		tokenStorage = inMemoryStorage
 	}
 
 	var provider oauth2.Provider
+	var err error
 
 	switch conf.OAuth2.Provider {
 	case generic.Name:
