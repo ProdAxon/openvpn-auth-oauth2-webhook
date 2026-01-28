@@ -174,6 +174,7 @@ func setupOpenVPNClient(
 
 	// Use FileStorage if storage-path is configured, otherwise use InMemory
 	var tokenStorage tokenstorage.Storage
+
 	if conf.OAuth2.Refresh.StoragePath != "" {
 		logger.LogAttrs(ctx, slog.LevelInfo, "using file-based token storage",
 			slog.String("path", conf.OAuth2.Refresh.StoragePath),
@@ -186,15 +187,19 @@ func setupOpenVPNClient(
 		)
 	} else {
 		logger.LogAttrs(ctx, slog.LevelInfo, "using in-memory token storage (tokens will be lost on restart)")
+
 		inMemoryStorage := tokenstorage.NewInMemory(conf.OAuth2.Refresh.Secret.String(), conf.OAuth2.Refresh.Expires)
+
 		err := inMemoryStorage.SetStorage(tokenDataStorage)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error setting token storage: %w", err)
 		}
+
 		tokenStorage = inMemoryStorage
 	}
 
 	var provider oauth2.Provider
+
 	var err error
 
 	switch conf.OAuth2.Provider {

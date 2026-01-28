@@ -20,7 +20,7 @@ import (
 	"github.com/zitadel/oidc/v3/pkg/client/rp"
 )
 
-// CtxEncryptedState is used to pass OAuth state through context for webhook
+// CtxEncryptedState is used to pass OAuth state through context for webhook.
 type CtxEncryptedState struct{}
 
 type openvpnManagementClient interface {
@@ -198,32 +198,45 @@ func (c Client) postCodeExchangeHandler(
 			return
 		}
 
-		// ProdAxon webhook: POST state+email+roles to nginx for JWT generation
+		// ProdAxon webhook: POST state+email+roles to nginx for JWT generation.
 		if encryptedState, ok := r.Context().Value(CtxEncryptedState{}).(string); ok && encryptedState != "" {
 			email := ""
+
 			var roles []string
+
 			if tokens.IDTokenClaims != nil {
 				email = tokens.IDTokenClaims.EMail
 				if email == "" {
 					email = tokens.IDTokenClaims.PreferredUsername
 				}
+
 				roles = tokens.IDTokenClaims.Roles
 			}
+
 			if email != "" {
-				webhookData := map[string]interface{}{
+				webhookData := map[string]any{
 					"state": encryptedState,
 					"email": email,
 					"roles": roles,
 				}
+
 				if jsonData, err := json.Marshal(webhookData); err == nil {
-					webhookCtx, webhookCancel := context.WithTimeout(context.Background(), 2*time.Second)
+					webhookCtx, webhookCancel := context.WithTimeout(r.Context(), 2*time.Second)
 					defer webhookCancel()
+
 					req, _ := http.NewRequestWithContext(webhookCtx, "POST", "http://127.0.0.1:9001/internal/sso-complete", bytes.NewReader(jsonData))
 					req.Header.Set("Content-Type", "application/json")
+
 					httpClient := &http.Client{Timeout: 2 * time.Second}
 					if resp, err := httpClient.Do(req); err == nil {
 						resp.Body.Close()
-						logger.LogAttrs(ctx, slog.LevelInfo, "VPN SSO webhook sent", slog.String("email", email), slog.Any("roles", roles))
+						logger.LogAttrs(
+							ctx,
+							slog.LevelInfo,
+							"VPN SSO webhook sent",
+							slog.String("email", email),
+							slog.Any("roles", roles),
+						)
 					}
 				}
 			}

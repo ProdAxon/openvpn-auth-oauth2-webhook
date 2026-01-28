@@ -13,6 +13,7 @@ import (
 // It provides the same functionality as InMemory but survives service restarts.
 type FileStorage struct {
 	*InMemory
+
 	filePath string
 	saveMu   sync.Mutex // separate mutex for file operations
 	logger   *slog.Logger
@@ -88,6 +89,7 @@ func (fs *FileStorage) loadFromFile() error {
 		fs.logger.Info("no existing token file, starting fresh",
 			slog.String("path", fs.filePath),
 		)
+
 		return nil // No file yet, start fresh
 	}
 
@@ -113,7 +115,7 @@ func (fs *FileStorage) loadFromFile() error {
 		}
 	}
 
-	if err := fs.InMemory.SetStorage(filtered); err != nil {
+	if err := fs.SetStorage(filtered); err != nil {
 		return fmt.Errorf("set storage error: %w", err)
 	}
 
@@ -132,9 +134,9 @@ func (fs *FileStorage) saveToFile() error {
 	fs.saveMu.Lock()
 	defer fs.saveMu.Unlock()
 
-	fs.InMemory.mu.RLock()
-	data, err := json.Marshal(fs.InMemory.data)
-	fs.InMemory.mu.RUnlock()
+	fs.mu.RLock()
+	data, err := json.Marshal(fs.data)
+	fs.mu.RUnlock()
 
 	if err != nil {
 		return fmt.Errorf("marshal error: %w", err)
@@ -150,6 +152,7 @@ func (fs *FileStorage) saveToFile() error {
 	if err := os.Rename(tmpFile, fs.filePath); err != nil {
 		// Try to clean up temp file
 		_ = os.Remove(tmpFile)
+
 		return fmt.Errorf("rename error: %w", err)
 	}
 
