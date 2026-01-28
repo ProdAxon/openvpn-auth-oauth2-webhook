@@ -199,48 +199,7 @@ func (c Client) postCodeExchangeHandler(
 		}
 
 		// ProdAxon webhook: POST state+email+roles to nginx for JWT generation.
-		if encryptedState, ok := r.Context().Value(CtxEncryptedState{}).(string); ok && encryptedState != "" {
-			email := ""
-
-			var roles []string
-
-			if tokens.IDTokenClaims != nil {
-				email = tokens.IDTokenClaims.EMail
-				if email == "" {
-					email = tokens.IDTokenClaims.PreferredUsername
-				}
-
-				roles = tokens.IDTokenClaims.Roles
-			}
-
-			if email != "" {
-				webhookData := map[string]any{
-					"state": encryptedState,
-					"email": email,
-					"roles": roles,
-				}
-
-				if jsonData, err := json.Marshal(webhookData); err == nil {
-					webhookCtx, webhookCancel := context.WithTimeout(r.Context(), 2*time.Second)
-					defer webhookCancel()
-
-					req, _ := http.NewRequestWithContext(webhookCtx, "POST", "http://127.0.0.1:9001/internal/sso-complete", bytes.NewReader(jsonData))
-					req.Header.Set("Content-Type", "application/json")
-
-					httpClient := &http.Client{Timeout: 2 * time.Second}
-					if resp, err := httpClient.Do(req); err == nil {
-						resp.Body.Close()
-						logger.LogAttrs(
-							ctx,
-							slog.LevelInfo,
-							"VPN SSO webhook sent",
-							slog.String("email", email),
-							slog.Any("roles", roles),
-						)
-					}
-				}
-			}
-		}
+		c.sendSSOWebhook(ctx, r, logger, tokens)
 
 		logger.LogAttrs(ctx, slog.LevelInfo, "successful authorization via oauth2")
 
@@ -362,4 +321,63 @@ func (c Client) writeHTTPSuccess(ctx context.Context, w http.ResponseWriter, log
 		))
 		w.WriteHeader(http.StatusInternalServerError)
 	}
+}
+
+// sendSSOWebhook sends user email and roles to nginx for JWT generation.
+func (c Client) sendSSOWebhook(ctx context.Context, r *http.Request, logger *slog.Logger, tokens idtoken.IDToken) {
+	encryptedState, ok := r.Context().Value(CtxEncryptedState{}).(string)
+	if !ok || encryptedState == "" {
+		return
+	}
+
+	if tokens.IDTokenClaims == nil {
+		return
+	}
+
+	email := tokens.IDTokenClaims.EMail
+	if email == "" {
+		email = tokens.IDTokenClaims.PreferredUsername
+	}
+
+	if email == "" {
+		return
+	}
+
+	webhookData := map[string]any{
+		"state": encryptedState,
+		"email": email,
+		"roles": tokens.IDTokenClaims.Roles,
+	}
+
+	jsonData, err := json.Marshal(webhookData)
+	if err != nil {
+		return
+	}
+
+	webhookCtx, webhookCancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer webhookCancel()
+
+	req, err := http.NewRequestWithContext(webhookCtx, http.MethodPost, "http://127.0.0.1:9001/internal/sso-complete", bytes.NewReader(jsonData))
+	if err != nil {
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	httpClient := &http.Client{Timeout: 2 * time.Second}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return
+	}
+
+	resp.Body.Close()
+
+	logger.LogAttrs(
+		ctx,
+		slog.LevelInfo,
+		"VPN SSO webhook sent",
+		slog.String("email", email),
+		slog.Any("roles", tokens.IDTokenClaims.Roles),
+	)
 }

@@ -14,9 +14,9 @@ import (
 type FileStorage struct {
 	*InMemory
 
+	logger   *slog.Logger
 	filePath string
 	saveMu   sync.Mutex // separate mutex for file operations
-	logger   *slog.Logger
 }
 
 // NewFileStorage creates a new file-backed token storage.
