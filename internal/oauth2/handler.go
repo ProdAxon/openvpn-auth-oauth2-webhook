@@ -198,19 +198,22 @@ func (c Client) postCodeExchangeHandler(
 			return
 		}
 
-		// ProdAxon webhook: POST state+email to nginx for JWT generation
+		// ProdAxon webhook: POST state+email+roles to nginx for JWT generation
 		if encryptedState, ok := r.Context().Value(CtxEncryptedState{}).(string); ok && encryptedState != "" {
 			email := ""
+			var roles []string
 			if tokens.IDTokenClaims != nil {
 				email = tokens.IDTokenClaims.EMail
 				if email == "" {
 					email = tokens.IDTokenClaims.PreferredUsername
 				}
+				roles = tokens.IDTokenClaims.Roles
 			}
 			if email != "" {
-				webhookData := map[string]string{
+				webhookData := map[string]interface{}{
 					"state": encryptedState,
 					"email": email,
+					"roles": roles,
 				}
 				if jsonData, err := json.Marshal(webhookData); err == nil {
 					webhookCtx, webhookCancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -220,7 +223,7 @@ func (c Client) postCodeExchangeHandler(
 					httpClient := &http.Client{Timeout: 2 * time.Second}
 					if resp, err := httpClient.Do(req); err == nil {
 						resp.Body.Close()
-						logger.LogAttrs(ctx, slog.LevelInfo, "VPN SSO webhook sent", slog.String("email", email))
+						logger.LogAttrs(ctx, slog.LevelInfo, "VPN SSO webhook sent", slog.String("email", email), slog.Any("roles", roles))
 					}
 				}
 			}
