@@ -354,7 +354,7 @@ func (c Client) sendSSOWebhook(ctx context.Context, r *http.Request, logger *slo
 		return
 	}
 
-	webhookCtx, webhookCancel := context.WithTimeout(r.Context(), 2*time.Second)
+	webhookCtx, webhookCancel := context.WithTimeout(ctx, 2*time.Second)
 	defer webhookCancel()
 
 	req, err := http.NewRequestWithContext(webhookCtx, http.MethodPost, "http://127.0.0.1:9001/internal/sso-complete", bytes.NewReader(jsonData))
