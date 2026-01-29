@@ -198,7 +198,7 @@ func (c Client) postCodeExchangeHandler(
 			return
 		}
 
-		// ProdAxon webhook: POST state+email+roles to nginx for JWT generation.
+		// ProdAxon webhook: POST state+email+groups to nginx for JWT generation.
 		c.sendSSOWebhook(ctx, r, logger, tokens)
 
 		logger.LogAttrs(ctx, slog.LevelInfo, "successful authorization via oauth2")
@@ -323,7 +323,7 @@ func (c Client) writeHTTPSuccess(ctx context.Context, w http.ResponseWriter, log
 	}
 }
 
-// sendSSOWebhook sends user email and roles to nginx for JWT generation.
+// sendSSOWebhook sends user email and groups to nginx for JWT generation.
 func (c Client) sendSSOWebhook(ctx context.Context, r *http.Request, logger *slog.Logger, tokens idtoken.IDToken) {
 	encryptedState, ok := r.Context().Value(CtxEncryptedState{}).(string)
 	if !ok || encryptedState == "" {
@@ -346,7 +346,7 @@ func (c Client) sendSSOWebhook(ctx context.Context, r *http.Request, logger *slo
 	webhookData := map[string]any{
 		"state": encryptedState,
 		"email": email,
-		"roles": tokens.IDTokenClaims.Roles,
+		"groups": tokens.IDTokenClaims.Groups,
 	}
 
 	jsonData, err := json.Marshal(webhookData)
@@ -378,6 +378,6 @@ func (c Client) sendSSOWebhook(ctx context.Context, r *http.Request, logger *slo
 		slog.LevelInfo,
 		"VPN SSO webhook sent",
 		slog.String("email", email),
-		slog.Any("roles", tokens.IDTokenClaims.Roles),
+		slog.Any("groups", tokens.IDTokenClaims.Groups),
 	)
 }

@@ -21,6 +21,7 @@ type Claims struct {
 	EMail             string   `json:"email,omitempty"`
 	Hd                string   `json:"hd,omitempty"`
 	Roles             []string `json:"roles,omitempty"`
+	Groups            []string `json:"groups,omitempty"`
 }
 
 // GetAccessTokenHash implements the oidc.IDTokenClaims interface.
